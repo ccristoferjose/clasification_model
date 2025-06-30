@@ -1,14 +1,14 @@
 import os
 import pandas as pd
 import joblib
-import tarfile
-import boto3
 from slugify import slugify
 from sqlalchemy import create_engine
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from dotenv import load_dotenv
+from datetime import datetime
+import boto3
 
 # === CARGAR VARIABLES DE ENTORNO ===
 load_dotenv()
@@ -24,6 +24,9 @@ S3_PREFIX = os.getenv("S3_PREFIX")
 engine = create_engine(f"mysql+pymysql://{USER_DB}:{PASSWORD_DB}@{HOST_DB}/{DB_NAME}")
 s3 = boto3.client("s3")
 
+# === TIMESTAMP GLOBAL PARA VERSIÓN DE MODELOS ===
+TIMESTAMP = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+
 # === OBTENER TODAS LAS CATEGORÍAS ===
 categorias_query = """
 SELECT DISTINCT grupo_cie10
@@ -35,8 +38,7 @@ categorias = pd.read_sql(categorias_query, engine)['grupo_cie10'].dropna().tolis
 # === FUNCIÓN DE ENTRENAMIENTO POR CATEGORÍA ===
 def entrenar_categoria(categoria: str):
     slug = slugify(categoria)
-    carpeta = f"model_{slug}"
-    os.makedirs(carpeta, exist_ok=True)
+    s3_model_prefix = f"{S3_PREFIX}/model_{slug}/{TIMESTAMP}"
 
     print(f"\nEntrenando modelo para: {categoria} [{slug}]")
 
@@ -78,20 +80,17 @@ def entrenar_categoria(categoria: str):
     )
     model.fit(X_train, y_train)
 
-    # Guardar modelo y encoders
-    model_dir = os.path.join(carpeta, "rf_model")
-    os.makedirs(model_dir, exist_ok=True)
-    joblib.dump(model, os.path.join(model_dir, "rf_model.pkl"), compress=3)
+    # Guardar y subir archivos temporalmente
+    joblib.dump(model, "rf_model.pkl", compress=3)
+    s3.upload_file("rf_model.pkl", BUCKET, f"{s3_model_prefix}/rf_model.pkl")
+    os.remove("rf_model.pkl")
+
     for col, enc in encoders.items():
-        joblib.dump(enc, os.path.join(model_dir, f"encoder_{col}.pkl"), compress=3)
+        fname = f"encoder_{col}.pkl"
+        joblib.dump(enc, fname, compress=3)
+        s3.upload_file(fname, BUCKET, f"{s3_model_prefix}/{fname}")
+        os.remove(fname)
 
-    # Comprimir carpeta
-    tar_path = f"{carpeta}.tar.gz"
-    with tarfile.open(tar_path, "w:gz") as tar:
-        tar.add(model_dir, arcname="rf_model")
-
-    # Subir a S3
-    s3.upload_file(tar_path, BUCKET, f"{S3_PREFIX}/{carpeta}.tar.gz")
     print(f"✓ Modelo para '{categoria}' entrenado y subido correctamente.")
 
 # === EJECUTAR ENTRENAMIENTO ===

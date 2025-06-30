@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import joblib
+from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
@@ -17,7 +18,7 @@ PASSWORD_DB = os.getenv("PASSWORD_DB")
 HOST_DB = os.getenv("HOST_DB")
 DB_NAME = os.getenv("DB_NAME")
 BUCKET = os.getenv("S3_BUCKET")
-S3_PREFIX = os.getenv("S3_PREFIX")
+S3_PREFIX = os.getenv("S3_PREFIX", "modelos")
 
 # === CONEXIÓN BD y S3 ===
 engine = create_engine(f"mysql+pymysql://{USER_DB}:{PASSWORD_DB}@{HOST_DB}/{DB_NAME}")
@@ -77,22 +78,19 @@ clf = RandomForestClassifier(
 )
 clf.fit(X_train, y_train)
 
-# === GUARDADO LOCAL EN /opt/ml/model Y ./ CON COMPRESIÓN ===
-output_dir = os.environ.get("SM_MODEL_DIR", "/opt/ml/model")
-os.makedirs(output_dir, exist_ok=True)
+# === SUBIDA A S3 ===
+timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+s3_model_prefix = f"{S3_PREFIX}/categorias/{timestamp}"
 
-joblib.dump(clf, os.path.join(output_dir, "rf_model_categorias.pkl"), compress=3)
+# Guardar archivos temporalmente
 joblib.dump(clf, "rf_model_categorias.pkl", compress=3)
+s3.upload_file("rf_model_categorias.pkl", BUCKET, f"{s3_model_prefix}/rf_model_categorias.pkl")
+os.remove("rf_model_categorias.pkl")
 
 for col, encoder in label_encoders.items():
-    path = f"encoder_{col}.pkl"
-    joblib.dump(encoder, os.path.join(output_dir, path), compress=3)
-    joblib.dump(encoder, path, compress=3)
-
-# === SUBIDA DIRECTA A S3 ===
-s3.upload_file("rf_model_categorias.pkl", bucket_name, f"{s3_output_prefix}/rf_model_categorias.pkl")
-for col in label_encoders.keys():
     fname = f"encoder_{col}.pkl"
-    s3.upload_file(fname, bucket_name, f"{s3_output_prefix}/{fname}")
+    joblib.dump(encoder, fname, compress=3)
+    s3.upload_file(fname, BUCKET, f"{s3_model_prefix}/{fname}")
+    os.remove(fname)
 
-"Modelo por categorías entrenado y subido correctamente."
+print("✅ Modelo por categorías entrenado y subido correctamente a S3.")
