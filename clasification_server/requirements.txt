@@ -1,0 +1,12 @@
+pandas==1.3.5
+numpy>=1.19.5,<2.0
+scikit-learn==1.2.1
+joblib==1.1.1
+pymysql==1.1.0
+sqlalchemy==1.4.49
+python-dateutil==2.8.1
+boto3==1.26.155
+flask>=2.1.0,<3.0
+flask-cors>=3.0.10
+python-dotenv>=1.0.0
+gunicorn>=20.1.0
