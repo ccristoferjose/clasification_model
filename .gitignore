@@ -1,0 +1,38 @@
+# Entornos virtuales
+venv/
+myenv/
+.mypy_cache/
+env/
+
+# modelos y checkpoints de machine learning
+models/
+*.pkl
+
+clasification_server/app/models/
+*.pkl
+
+# Archivos de Python compilados
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+# Archivos de base de datos locales
+*.sqlite3
+*.db
+
+# Archivos de paquetes y distribuciones
+*.egg-info/
+dist/
+build/
+
+# Archivos comprimidos
+*.tar.gz
+*.zip
+
+# Entornos y credenciales
+.env
+*.env
+
+# Archivos temporales de sistema
+.DS_Store
+Thumbs.db
