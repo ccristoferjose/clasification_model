@@ -13,8 +13,13 @@ import { api } from '../../lib/api';
 // Funciones de localStorage
 const STORAGE_KEYS = {
   PATIENTS: 'medical_classification_patients',
-  PATIENT_COUNTER: 'medical_classification_patient_counter'
+  PATIENT_COUNTER: 'medical_classification_patient_counter',
+  DEPARTAMENTOS: 'medical_classification_departamentos',
+  DEPARTAMENTOS_TIMESTAMP: 'medical_classification_departamentos_timestamp'
 };
+
+// Duración del cache de departamentos (24 horas)
+const DEPARTAMENTOS_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas en millisegundos
 
 const getStoredPatients = () => {
   try {
@@ -31,6 +36,53 @@ const savePatients = (patients) => {
     localStorage.setItem(STORAGE_KEYS.PATIENTS, JSON.stringify(patients));
   } catch (error) {
     console.error('Error saving patients to localStorage:', error);
+  }
+};
+
+const getStoredDepartamentos = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.DEPARTAMENTOS);
+    const timestamp = localStorage.getItem(STORAGE_KEYS.DEPARTAMENTOS_TIMESTAMP);
+    
+    if (!stored || !timestamp) {
+      return null;
+    }
+    
+    const now = Date.now();
+    const cacheTime = parseInt(timestamp);
+    
+    // Verificar si el cache está expirado
+    if (now - cacheTime > DEPARTAMENTOS_CACHE_DURATION) {
+      console.log('Cache de departamentos expirado, necesita actualización');
+      return null;
+    }
+    
+    const departamentos = JSON.parse(stored);
+    console.log('Departamentos cargados desde localStorage:', departamentos.length);
+    return departamentos;
+  } catch (error) {
+    console.error('Error loading departamentos from localStorage:', error);
+    return null;
+  }
+};
+
+const saveDepartamentos = (departamentos) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.DEPARTAMENTOS, JSON.stringify(departamentos));
+    localStorage.setItem(STORAGE_KEYS.DEPARTAMENTOS_TIMESTAMP, Date.now().toString());
+    console.log('Departamentos guardados en localStorage:', departamentos.length);
+  } catch (error) {
+    console.error('Error saving departamentos to localStorage:', error);
+  }
+};
+
+const clearDepartamentosCache = () => {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.DEPARTAMENTOS);
+    localStorage.removeItem(STORAGE_KEYS.DEPARTAMENTOS_TIMESTAMP);
+    console.log('Cache de departamentos limpiado');
+  } catch (error) {
+    console.error('Error clearing departamentos cache:', error);
   }
 };
 
@@ -72,6 +124,8 @@ const PatientManagement = () => {
   const [municipios, setMunicipios] = useState([]);
   const [loadingDepartamentos, setLoadingDepartamentos] = useState(false);
   const [loadingMunicipios, setLoadingMunicipios] = useState(false);
+  const [departamentosError, setDepartamentosError] = useState(null);
+  const [departamentosInitialized, setDepartamentosInitialized] = useState(false);
 
   // Estados para los diálogos
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -79,18 +133,114 @@ const PatientManagement = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Función de debug global
+  React.useEffect(() => {
+    window.debugDepartamentos = () => {
+      console.log('=== DEBUG DEPARTAMENTOS ===');
+      console.log('Departamentos en estado:', departamentos);
+      console.log('Cantidad de departamentos:', departamentos.length);
+      console.log('Loading departamentos:', loadingDepartamentos);
+      console.log('Departamentos inicializados:', departamentosInitialized);
+      console.log('Error de departamentos:', departamentosError);
+      console.log('Cache localStorage:');
+      console.log('- Stored:', localStorage.getItem(STORAGE_KEYS.DEPARTAMENTOS));
+      console.log('- Timestamp:', localStorage.getItem(STORAGE_KEYS.DEPARTAMENTOS_TIMESTAMP));
+      const cached = getStoredDepartamentos();
+      console.log('- Cached válido:', cached);
+      console.log('Show create form:', showCreateForm);
+      console.log('Env mode:', import.meta.env.MODE);
+      console.log('API Base URL:', import.meta.env.PROD ? 'https://api.gtmedclassifiergt.com' : 'proxy');
+    };
+    
+    console.log('🔧 Debug disponible: ejecuta debugDepartamentos() en la consola para ver el estado');
+    
+    return () => {
+      delete window.debugDepartamentos;
+    };
+  }, [departamentos, loadingDepartamentos, departamentosInitialized, departamentosError, showCreateForm]);
+
   // Cargar pacientes del localStorage al iniciar
   useEffect(() => {
     const storedPatients = getStoredPatients();
     setPatients(storedPatients);
-    fetchDepartamentos();
+    
+    const cachedDepartamentos = getStoredDepartamentos();
+    if (cachedDepartamentos) {
+      setDepartamentos(cachedDepartamentos);
+      setDepartamentosInitialized(true);
+      console.log('Departamentos cargados desde cache:', cachedDepartamentos.length);
+    } else {
+      console.log('No hay departamentos en cache, cargando desde API...');
+      fetchDepartamentos();
+    }
   }, []);
 
+  // Efecto adicional para verificar departamentos cuando se muestra el formulario
+  useEffect(() => {
+    if (showCreateForm && departamentos.length === 0 && !loadingDepartamentos && !departamentosInitialized) {
+      console.log('Formulario visible pero sin departamentos, recargando...');
+      fetchDepartamentos();
+    }
+  }, [showCreateForm, departamentos.length, loadingDepartamentos, departamentosInitialized]);
+
+  // Efecto para intentar recargar departamentos si fallan después de un tiempo
+  useEffect(() => {
+    if (departamentosError && !loadingDepartamentos && departamentos.length === 0) {
+      console.log('Error detectado y sin departamentos, reintentando en 3 segundos...');
+      const timeout = setTimeout(() => {
+        if (departamentos.length === 0 && !loadingDepartamentos) {
+          console.log('Reintento automático de carga de departamentos...');
+          fetchDepartamentos();
+        }
+      }, 3000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [departamentosError, loadingDepartamentos, departamentos.length]);
+
+  // Función para verificar conectividad de la API
+  const checkApiConnectivity = async () => {
+    try {
+      console.log('Verificando conectividad de API...');
+      const response = await fetch(`${import.meta.env.PROD ? 'https://api.gtmedclassifiergt.com' : ''}/api/departamentos`, {
+        method: 'HEAD',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      console.log('Estado de conectividad:', response.status, response.statusText);
+      return response.ok;
+    } catch (error) {
+      console.error('Error de conectividad:', error);
+      return false;
+    }
+  };
+
   // Función para obtener departamentos
-  const fetchDepartamentos = async () => {
+  const fetchDepartamentos = async (retry = 0) => {
     setLoadingDepartamentos(true);
+    setDepartamentosError(null);
+    
+    console.log('Iniciando carga de departamentos...', { 
+      retry, 
+      timestamp: new Date().toISOString(),
+      currentDepartamentos: departamentos.length,
+      showCreateForm,
+      env: import.meta.env.MODE,
+      initialized: departamentosInitialized
+    });
+
+    // Verificar conectividad antes de hacer la petición principal
+    if (retry === 0) {
+      const isConnected = await checkApiConnectivity();
+      if (!isConnected) {
+        console.warn('API no responde, pero continuando con la petición...');
+      }
+    }
+    
     try {
       const data = await api.getDepartamentos();
+      console.log('Respuesta de departamentos:', data);
       
       if (data.success && data.data) {
         const departamentosFormateados = data.data.map(dept => ({
@@ -98,15 +248,35 @@ const PatientManagement = () => {
           nombre: dept.nombre
         }));
         setDepartamentos(departamentosFormateados);
+        saveDepartamentos(departamentosFormateados); // Guardar en localStorage
+        setDepartamentosInitialized(true);
+        console.log('Departamentos cargados exitosamente:', departamentosFormateados.length);
+      } else {
+        throw new Error('Respuesta inválida del servidor');
       }
     } catch (error) {
       console.error('Error al cargar departamentos:', error);
-      // Fallback con departamentos básicos
-      setDepartamentos([
+      setDepartamentosError(error.message);
+      
+      // Retry automático hasta 2 intentos
+      if (retry < 2) {
+        console.log(`Reintentando carga de departamentos (intento ${retry + 1}/2)...`);
+        setTimeout(() => {
+          fetchDepartamentos(retry + 1);
+        }, 1000 * (retry + 1)); // Delay incremental: 1s, 2s
+        return;
+      }
+      
+      // Fallback con departamentos básicos después de agotar reintentos
+      console.log('Usando departamentos de fallback...');
+      const fallbackDepartamentos = [
         { codigo: '1', nombre: 'Guatemala' },
         { codigo: '9', nombre: 'Quetzaltenango' },
         { codigo: '18', nombre: 'Izabal' }
-      ]);
+      ];
+      setDepartamentos(fallbackDepartamentos);
+      setDepartamentosInitialized(true);
+      saveDepartamentos(fallbackDepartamentos); // Guardar fallback también
     } finally {
       setLoadingDepartamentos(false);
     }
@@ -350,12 +520,29 @@ const PatientManagement = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center">
-              <User className="h-5 w-5 mr-2" />
-              Información del Paciente
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center">
+                <User className="h-5 w-5 mr-2" />
+                Información del Paciente
+              </div>
+              {departamentosError && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => fetchDepartamentos()}
+                  className="text-blue-600"
+                >
+                  🔄 Recargar Departamentos
+                </Button>
+              )}
             </CardTitle>
             <CardDescription>
               Complete todos los campos obligatorios para registrar al paciente
+              {departamentos.length > 0 && (
+                <span className="text-green-600 text-sm ml-2">
+                  ✓ {departamentos.length} departamentos disponibles
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -458,6 +645,19 @@ const PatientManagement = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="deptoresiden">Departamento de Residencia *</Label>
+                {departamentosError && (
+                  <div className="text-sm text-red-600 mb-2">
+                    ⚠️ Error cargando departamentos: {departamentosError}
+                    <Button 
+                      variant="link" 
+                      size="sm" 
+                      onClick={() => fetchDepartamentos()} 
+                      className="ml-2 h-auto p-0 text-blue-600"
+                    >
+                      Reintentar
+                    </Button>
+                  </div>
+                )}
                 <select
                   id="deptoresiden"
                   name="deptoresiden"
@@ -476,6 +676,11 @@ const PatientManagement = () => {
                     </option>
                   ))}
                 </select>
+                {loadingDepartamentos && (
+                  <div className="text-sm text-gray-500">
+                    🔄 Cargando departamentos...
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="muniresiden">Municipio de Residencia *</Label>
@@ -545,6 +750,15 @@ const PatientManagement = () => {
     );
   }
 
+  // Función para forzar recarga de departamentos (limpia cache)
+  const forceReloadDepartamentos = () => {
+    clearDepartamentosCache();
+    setDepartamentos([]);
+    setDepartamentosInitialized(false);
+    setDepartamentosError(null);
+    fetchDepartamentos();
+  };
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
@@ -552,29 +766,78 @@ const PatientManagement = () => {
           <h1 className="text-3xl font-bold text-gray-900">Gestión de Pacientes</h1>
           <p className="text-gray-600 mt-1">
             Administre los perfiles de sus pacientes • {patients.length} pacientes registrados
+            {!departamentosInitialized && loadingDepartamentos && (
+              <span className="text-blue-600 ml-2">• Cargando departamentos...</span>
+            )}
+            {departamentosInitialized && departamentos.length > 0 && (
+              <span className="text-green-600 ml-2">• {departamentos.length} departamentos disponibles</span>
+            )}
+            {departamentosError && (
+              <span className="text-red-600 ml-2">• Error: {departamentosError}</span>
+            )}
           </p>
         </div>
         <Button 
-          onClick={() => setShowCreateForm(true)}
+          onClick={() => {
+            if (!departamentosInitialized && departamentos.length === 0 && !loadingDepartamentos) {
+              console.log('Forzando carga de departamentos desde botón Nuevo Paciente...');
+              fetchDepartamentos();
+            }
+            setShowCreateForm(true);
+          }}
           className="bg-blue-600 hover:bg-blue-700"
+          disabled={loadingDepartamentos && !departamentosInitialized}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Nuevo Paciente
+          {loadingDepartamentos && !departamentosInitialized ? 'Cargando...' : 'Nuevo Paciente'}
         </Button>
       </div>
 
       {/* Barra de búsqueda */}
       <Card>
         <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Buscar por nombre o DPI..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+          <div className="flex gap-4 items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Buscar por nombre o DPI..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            {(departamentosError || (!departamentosInitialized && departamentos.length === 0)) && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => fetchDepartamentos()}
+                disabled={loadingDepartamentos}
+                className="text-blue-600 border-blue-200 hover:bg-blue-50"
+              >
+                🔄 {loadingDepartamentos ? 'Cargando...' : 'Cargar Departamentos'}
+              </Button>
+            )}
+            {departamentosInitialized && departamentos.length > 0 && departamentosError && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={forceReloadDepartamentos}
+                disabled={loadingDepartamentos}
+                className="text-orange-600 border-orange-200 hover:bg-orange-50"
+              >
+                🔄 Recargar Cache
+              </Button>
+            )}
           </div>
+          {departamentosError && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+              <div className="text-sm text-red-700">
+                <strong>Problema con departamentos:</strong> {departamentosError}
+                <br />
+                <span className="text-red-600">Esto puede afectar la creación de nuevos pacientes.</span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
