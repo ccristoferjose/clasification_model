@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from .predecir_causa import predecir_top10
 from sqlalchemy import create_engine
-from .db import obtener_descripciones_cie10
+from .db import obtener_descripciones_cie10, obtener_departamentos, obtener_municipios_por_departamento, obtener_categorias_cie10, obtener_patologias_por_categoria
 import os
 
 main = Blueprint("main", __name__)
@@ -87,3 +87,97 @@ def predict_causas():
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)})
+
+@main.route("/departamentos", methods=["GET"])
+def get_departamentos():
+    """
+    Endpoint para obtener todos los departamentos
+    """
+    try:
+        engine = get_engine_from_config()
+        departamentos = obtener_departamentos(engine)
+        
+        return jsonify({
+            "success": True, 
+            "data": departamentos,
+            "count": len(departamentos)
+        })
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)})
+
+@main.route("/municipios/<departamento_id>", methods=["GET"])
+def get_municipios(departamento_id):
+    """
+    Endpoint para obtener todos los municipios de un departamento específico
+    """
+    try:
+        engine = get_engine_from_config()
+        municipios = obtener_municipios_por_departamento(engine, departamento_id)
+        
+        return jsonify({
+            "success": True, 
+            "data": municipios,
+            "count": len(municipios),
+            "departamento_id": departamento_id
+        })
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)})
+
+@main.route("/categorias", methods=["GET"])
+def get_categorias():
+    """
+    Endpoint para obtener todas las categorías (grupos CIE10) disponibles
+    """
+    try:
+        engine = get_engine_from_config()
+        categorias = obtener_categorias_cie10(engine)
+        
+        return jsonify({
+            "success": True, 
+            "data": categorias,
+            "count": len(categorias)
+        })
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)})
+
+@main.route("/patologias", methods=["POST"])
+def get_patologias_por_categoria():
+    """
+    Endpoint para obtener todas las patologías de una categoría específica (grupo CIE10)
+    Recibe la categoría en el body del request
+    """
+    try:
+        data = request.json
+        categoria = data.get("categoria")
+        
+        if not categoria:
+            return jsonify({"success": False, "error": "El campo 'categoria' es requerido"}), 400
+        
+        engine = get_engine_from_config()
+        patologias = obtener_patologias_por_categoria(engine, categoria)
+        
+        return jsonify({
+            "success": True, 
+            "data": patologias,
+            "count": len(patologias),
+            "categoria": categoria
+        })
+    
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)})
+
+
+@main.route("/", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok"}), 200
