@@ -1,6 +1,6 @@
 // API configuration for handling different environments
 const API_BASE_URL = import.meta.env.PROD 
-  ? 'http://15.222.200.111:3000'  // Production: direct to backend
+  ? 'https://api.gtmedclassifiergt.com'  // Production: direct to backend with HTTPS
   : '';  // Development: use Vite proxy
 
 // API utility functions

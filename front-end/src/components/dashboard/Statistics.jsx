@@ -8,7 +8,9 @@ import {
   Activity,
   MapPin,
   Target,
-  Brain
+  Brain,
+  AlertTriangle,
+  Construction
 } from 'lucide-react';
 
 const Statistics = () => {
@@ -93,6 +95,41 @@ const Statistics = () => {
           Análisis de casos y distribución geográfica en Guatemala
         </p>
       </div>
+
+      {/* Construction Warning */}
+      <Card className="mb-8 border-orange-200 bg-orange-50">
+        <CardContent className="p-6">
+          <div className="flex items-start space-x-4">
+            <div className="flex-shrink-0">
+              <div className="flex items-center justify-center w-12 h-12 bg-orange-100 rounded-full">
+                <Construction className="h-6 w-6 text-orange-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center space-x-2 mb-2">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                <h3 className="text-lg font-semibold text-orange-800">
+                  Página en Construcción
+                </h3>
+              </div>
+              <div className="text-orange-700 space-y-2">
+                <p className="font-medium">
+                  ⚠️ Esta página está actualmente en desarrollo y contiene datos de ejemplo únicamente.
+                </p>
+                <ul className="text-sm space-y-1 ml-4">
+                  <li>• Los datos mostrados son <strong>ficticios</strong> y no representan información real</li>
+                  <li>• Las estadísticas son generadas automáticamente para fines de demostración</li>
+                  <li>• <strong>NO</strong> utilice esta información para tomar decisiones médicas</li>
+                  <li>• La funcionalidad completa estará disponible en futuras versiones</li>
+                </ul>
+                <p className="text-sm font-medium mt-3">
+                  Para consultas médicas reales, utilice las funciones de clasificación y gestión de pacientes.
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* General Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

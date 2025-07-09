@@ -17,7 +17,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://api.gtmedclassifiergt.com',
+        target: 'https://www.gtmedclassifiergt.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/api'),
       },
@@ -35,5 +35,4 @@ export default defineConfig({
       },
     },
   },
-})
-
+}) 

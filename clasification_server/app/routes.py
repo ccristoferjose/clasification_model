@@ -176,3 +176,8 @@ def get_patologias_por_categoria():
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)})
+
+
+@main.route("/", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok"}), 200

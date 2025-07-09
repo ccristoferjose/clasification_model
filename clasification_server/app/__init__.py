@@ -11,6 +11,7 @@ def create_app():
     
     # ✅ Configurar CORS para permitir peticiones desde el frontend
     CORS(app, origins=[
+        "https://www.gtmedclassifiergt.com",  # Production frontend
         "http://clasification-app.s3-website.us-east-2.amazonaws.com",
         "https://clasification-app.s3-website.us-east-2.amazonaws.com",
         "http://localhost:3000",
