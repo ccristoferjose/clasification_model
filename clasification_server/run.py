@@ -9,7 +9,7 @@ load_dotenv()
 app = create_app()
 
 # Leer el puerto y modo debug desde entorno
-PORT = int(os.environ.get("PORT", 5000))
+PORT = int(os.environ.get("PORT", 3000))
 DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
 
 if __name__ == "__main__":
